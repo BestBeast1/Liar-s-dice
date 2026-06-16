@@ -68,8 +68,9 @@
   .player-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 0.5px solid var(--border); font-size: 14px; }
   .player-row:last-child { border-bottom: none; }
   .av { width: 34px; height: 34px; border-radius: 50%; background: var(--info-bg); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--info-text); flex-shrink: 0; }
-  .dice-row { display: flex; justify-content: center; gap: 10px; margin: 1.25rem 0; flex-wrap: wrap; }
-  .die { width: 52px; height: 52px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 28px; user-select: none; }
+  .dice-row { display: flex; justify-content: center; gap: 12px; margin: 1.5rem 0; flex-wrap: wrap; }
+  .die { width: 72px; height: 72px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 42px; user-select: none; }
+  .die.wild { border: 2px solid #f59e0b; background: #fffbeb; }
   .die.shake { animation: shk .45s ease; }
   @keyframes shk { 0%,100%{transform:rotate(0)} 20%{transform:rotate(-14deg) scale(1.1)} 40%{transform:rotate(14deg) scale(1.1)} 60%{transform:rotate(-8deg)} 80%{transform:rotate(8deg)} }
   .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
@@ -394,7 +395,7 @@ async function doShake(){
   document.getElementById('shake-dice').innerHTML=Array(5).fill('<div class="die shake">🎲</div>').join('');
   setTimeout(async()=>{
     myDice=Array.from({length:5},()=>Math.ceil(Math.random()*6));
-    document.getElementById('shake-dice').innerHTML=myDice.map(d=>`<div class="die">${FACES[d-1]}</div>`).join('');
+    document.getElementById('shake-dice').innerHTML=myDice.map(d=>`<div class="die${d===1?' wild':''}">${FACES[d-1]}</div>`).join('');
     document.getElementById('shake-hint').textContent='Rolled! Waiting for others...';
     document.getElementById('shake-hint').className='msg info';
     btn.textContent='✓ Done';
@@ -410,7 +411,7 @@ async function doShake(){
 
 async function goBid(roomData){
   show('s-bid');
-  document.getElementById('bid-dice').innerHTML=myDice.map(d=>`<div class="die">${FACES[d-1]}</div>`).join('');
+  document.getElementById('bid-dice').innerHTML=myDice.map(d=>`<div class="die${d===1?' wild':''}">${FACES[d-1]}</div>`).join('');
   if(roomData){ renderBidPhase(roomData); renderChat('chat-bid',roomData); }
   subscribeRoom(r=>{
     if(r.open_called||r.status==='reveal'){ unsubscribeRoom(); goReveal(r); return; }
@@ -437,9 +438,19 @@ async function placeBid(){
   const face=parseInt(document.getElementById('bid-face').value)||1;
   const {data:room}=await sb.from('rooms').select('*').eq('id',currentRoomId).single();
   if(!room)return;
+  const lb=room.last_bid;
+  if(lb){
+    if(count<lb.count){ alert('You must bid at least '+lb.count+' dice — cannot lower the count.'); return; }
+    if(count===lb.count&&face<=lb.face){ alert('Same count ('+count+'×) — you must choose a higher face value than '+lb.face+'.'); return; }
+  }
   const players=room.players.map(p=>p.id===myId?{...p,bid:{count,face}}:p);
-  const chat=[...(room.chat||[]),{id:'sys',name:'',text:`${myName} bid: ${count}× face ${face} ${FACES[face-1]}`,ts:Date.now()}];
+  const chat=[...(room.chat||[]),{id:'sys',name:'',text:myName+' bid: '+count+'× face '+face+' '+FACES[face-1],ts:Date.now()}];
   await sb.from('rooms').update({players,last_bid:{count,face,byName:myName,byId:myId},chat}).eq('id',currentRoomId);
+}
+
+function countWithWildcards(dice, face){
+  if(face===1) return dice.filter(d=>d===1).length;
+  return dice.filter(d=>d===face||d===1).length;
 }
 
 async function callOpen(){
@@ -459,7 +470,7 @@ async function goReveal(roomData){
     return `<div class="result-card">
       <div class="result-name">${esc(p.name)}${p.id===myId?' (you)':''}</div>
       <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
-        ${dice.length?dice.map(d=>`<span style="font-size:22px;">${FACES[d-1]}</span>`).join(''):'<span style="color:#9ca3af;font-size:13px;">—</span>'}
+        ${dice.length?dice.map(d=>`<span style="font-size:30px;${d===1?' border-radius:6px; padding:2px 4px; background:#fffbeb; border:2px solid #f59e0b;':''}"> ${FACES[d-1]}</span>`).join(''):'<span style="color:#9ca3af;font-size:13px;">—</span>'}
       </div>
     </div>`;
   }).join('');
@@ -467,8 +478,9 @@ async function goReveal(roomData){
   const lb=room.last_bid;
   let summary='';
   if(lb&&allDice.length){
-    const cnt=allDice.filter(d=>d===lb.face).length;
-    summary=`Last bid: ${lb.count}× face ${lb.face} — actual count: ${cnt}×. ${cnt>=lb.count?'✅ Bid was correct!':'❌ Bluff! Bid was too high.'}`;
+    const cnt=countWithWildcards(allDice,lb.face);
+    const wilds=lb.face!==1?allDice.filter(d=>d===1).length:0;
+    summary='Last bid: '+lb.count+'× face '+lb.face+' — actual count: '+cnt+'×'+(wilds>0?' (incl. '+wilds+' wildcard 1s)':'')+'. '+(cnt>=lb.count?'✅ Bid was correct!':'❌ Bluff! Bid was too high.');
   } else { summary='All dice shown: '+allDice.map(d=>FACES[d-1]).join(' '); }
   document.getElementById('reveal-summary').textContent=summary;
   renderChat('chat-reveal',room);
