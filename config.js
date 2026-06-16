@@ -3,5 +3,5 @@
 //  Get them from: https://supabase.com → your project → Settings → API
 // ─────────────────────────────────────────────────
 
-const SUPABASE_URL      = 'YOUR_SUPABASE_URL';       // e.g. https://xyzxyz.supabase.co
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';  // long key starting with eyJ...
+const SUPABASE_URL      = 'https://jipbclmcrynhurlsprot.supabase.co/rest/v1/';       // e.g. https://xyzxyz.supabase.co
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppcGJjbG1jcnluaHVybHNwcm90Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTk4NzQsImV4cCI6MjA5NzE3NTg3NH0.OQvUajEAlCJ7t4dKw60xutAbPNlsQCF_TmhVLF_KcYU';  // long key starting with eyJ...
