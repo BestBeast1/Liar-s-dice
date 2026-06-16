@@ -157,6 +157,7 @@
         <button onclick="leaveRoom()">← Leave</button>
         <button class="btn-primary" id="start-btn" onclick="startGame()" disabled>Start game</button>
       </div>
+      <button class="btn-danger" id="close-room-btn" style="display:none;margin-top:6px;" onclick="closeRoom()">🗑 Close room & kick everyone</button>
     </div>
     <div id="chat-waiting"></div>
   </div>
@@ -316,6 +317,15 @@ async function leaveRoom(){
   refreshLobby(); show('s-lobby');
 }
 
+async function closeRoom(){
+  if(!currentRoomId)return;
+  if(!confirm('Close this room and remove all players?'))return;
+  await sb.from('rooms').delete().eq('id',currentRoomId);
+  unsubscribeRoom();
+  currentRoomId=null; myDice=[];
+  refreshLobby(); show('s-lobby');
+}
+
 function unsubscribeRoom(){
   if(realtimeSub){ sb.removeChannel(realtimeSub); realtimeSub=null; }
 }
@@ -334,6 +344,7 @@ async function goWaiting(){
   if(room) renderWaiting(room);
   subscribeRoom(r=>{
     if(r.status==='shaking'){ unsubscribeRoom(); goShake(r); return; }
+    if(r.status==='closed'){ unsubscribeRoom(); currentRoomId=null; myDice=[]; alert('The host closed the room.'); refreshLobby(); show('s-lobby'); return; }
     renderWaiting(r);
     renderChat('chat-waiting',r);
   });
@@ -353,6 +364,8 @@ function renderWaiting(room){
   if(room.host_id===myId && room.players.length>=2){ sb2.disabled=false; sb2.textContent='Start ('+room.players.length+' players)'; }
   else if(room.host_id===myId){ sb2.disabled=true; sb2.textContent='Need 2+ players'; }
   else{ sb2.disabled=true; sb2.textContent='Waiting for host...'; }
+  const closeBtn=document.getElementById('close-room-btn');
+  if(closeBtn) closeBtn.style.display=room.host_id===myId?'block':'none';
 }
 
 async function startGame(){
