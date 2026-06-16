@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Liar's Dice</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f5f4;
+    --bg3: #ebe9e6;
+    --text: #1a1a1a;
+    --text2: #6b7280;
+    --text3: #9ca3af;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --info-bg: #eff6ff;
+    --info-text: #1d4ed8;
+    --success-bg: #f0fdf4;
+    --success-text: #15803d;
+    --warn-bg: #fffbeb;
+    --warn-text: #b45309;
+    --danger-bg: #fef2f2;
+    --danger-text: #dc2626;
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg2); color: var(--text); min-height: 100vh; }
+  .page { max-width: 520px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+  .card-flat { background: var(--bg2); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 0.25rem; }
+  h2 { font-size: 18px; font-weight: 600; margin-bottom: 1rem; }
+  h3 { font-size: 15px; font-weight: 600; margin-bottom: 0.5rem; }
+  p { font-size: 14px; color: var(--text2); line-height: 1.6; margin-bottom: 0.75rem; }
+  label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 4px; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 0 12px; height: 40px; border: 0.5px solid var(--border2);
+    border-radius: var(--radius); font-size: 14px; background: var(--bg); color: var(--text);
+    margin-bottom: 0.75rem; outline: none; transition: border-color .15s;
+  }
+  input:focus, select:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+  button {
+    width: 100%; padding: 10px 16px; border-radius: var(--radius); border: 0.5px solid var(--border2);
+    background: var(--bg); color: var(--text); font-size: 14px; font-weight: 500;
+    cursor: pointer; margin-bottom: 0.5rem; transition: background .12s, transform .1s;
+  }
+  button:hover { background: var(--bg2); }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .btn-primary:hover { background: #333; }
+  .btn-danger { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-text); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .sep { height: 0.5px; background: var(--border); margin: 1rem 0; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .badge-w { background: var(--warn-bg); color: var(--warn-text); }
+  .badge-p { background: var(--success-bg); color: var(--success-text); }
+  .badge-f { background: var(--danger-bg); color: var(--danger-text); }
+  .badge-host { background: var(--info-bg); color: var(--info-text); }
+  .msg { font-size: 13px; padding: 10px 14px; border-radius: var(--radius); margin-bottom: 0.75rem; background: var(--bg2); color: var(--text2); }
+  .msg.info { background: var(--info-bg); color: var(--info-text); }
+  .msg.ok { background: var(--success-bg); color: var(--success-text); }
+  .player-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 0.5px solid var(--border); font-size: 14px; }
+  .player-row:last-child { border-bottom: none; }
+  .av { width: 34px; height: 34px; border-radius: 50%; background: var(--info-bg); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--info-text); flex-shrink: 0; }
+  .dice-row { display: flex; justify-content: center; gap: 10px; margin: 1.25rem 0; flex-wrap: wrap; }
+  .die { width: 52px; height: 52px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 28px; user-select: none; }
+  .die.shake { animation: shk .45s ease; }
+  @keyframes shk { 0%,100%{transform:rotate(0)} 20%{transform:rotate(-14deg) scale(1.1)} 40%{transform:rotate(14deg) scale(1.1)} 60%{transform:rotate(-8deg)} 80%{transform:rotate(8deg)} }
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+  .result-card { background: var(--bg2); border-radius: var(--radius); padding: 12px; text-align: center; }
+  .result-name { font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
+  .lobby-item { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 0.5px solid var(--border); font-size: 14px; }
+  .lobby-item:last-child { border-bottom: none; }
+  .lobby-item .room-name { flex: 1; font-weight: 500; }
+
+  /* CHAT */
+  .chat-wrap { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
+  .chat-head { padding: 10px 14px; border-bottom: 0.5px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text2); }
+  .chat-msgs { height: 190px; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 5px; }
+  .chat-msg { font-size: 13px; line-height: 1.5; }
+  .chat-msg .who { font-weight: 600; color: var(--text); }
+  .chat-msg .txt { color: var(--text2); }
+  .chat-msg.me .who { color: var(--info-text); }
+  .chat-msg.sys { color: var(--text3); font-style: italic; font-size: 12px; }
+  .chat-row { display: flex; gap: 8px; padding: 10px 14px; border-top: 0.5px solid var(--border); }
+  .chat-row input { flex: 1; margin-bottom: 0; }
+  .chat-row button { width: auto; padding: 0 14px; margin-bottom: 0; font-size: 13px; }
+
+  /* SETUP NOTICE */
+  #setup-notice { display: none; }
+  #setup-notice.show { display: block; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- SETUP NOTICE (shown until configured) -->
+  <div id="setup-notice" class="show">
+    <div class="card" style="border: 2px solid var(--danger-text);">
+      <h2 style="color:var(--danger-text);">⚙️ Setup required</h2>
+      <p>Open <strong>config.js</strong> and paste your Supabase URL and anon key. See the README for steps.</p>
+    </div>
+  </div>
+
+  <!-- WELCOME -->
+  <div class="screen" id="s-welcome">
+    <div class="card">
+      <div style="text-align:center;margin-bottom:1.5rem;">
+        <div style="font-size:52px;margin-bottom:0.5rem;">🎲</div>
+        <h1>Liar's Dice</h1>
+        <p style="margin-bottom:0;">3–4 players · Shake · Bid · Reveal</p>
+      </div>
+      <div class="sep"></div>
+      <label>Your name</label>
+      <input type="text" id="inp-name" placeholder="Enter your name..." maxlength="16">
+      <button class="btn-primary" onclick="enterLobby()">Enter lobby →</button>
+    </div>
+    <div class="card-flat">
+      <h3>How to play</h3>
+      <p>Each player shakes their cup — only you see your own dice. Players bid on how many of a certain number exist across all dice. Anyone can call "Open" to reveal everything. Bluff wisely, and use the chat to trash talk!</p>
+    </div>
+  </div>
+
+  <!-- LOBBY -->
+  <div class="screen" id="s-lobby">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+        <h2 style="margin-bottom:0;">Public lobby</h2>
+        <button onclick="refreshLobby()" style="width:auto;padding:6px 12px;font-size:13px;">↻ Refresh</button>
+      </div>
+      <div id="lobby-list"><p style="text-align:center;padding:1rem 0;">Loading...</p></div>
+      <div class="sep"></div>
+      <button class="btn-primary" onclick="createRoom()">+ Create new room</button>
+      <button onclick="goBack('s-lobby','s-welcome')">← Back</button>
+    </div>
+  </div>
+
+  <!-- WAITING ROOM -->
+  <div class="screen" id="s-waiting">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">
+        <h2 style="margin-bottom:0;" id="room-title">Room</h2>
+        <span class="badge badge-w">Waiting</span>
+      </div>
+      <p id="wait-sub">Waiting for players...</p>
+      <label>Players in room</label>
+      <div id="wait-players"></div>
+      <div class="sep"></div>
+      <div class="row2">
+        <button onclick="leaveRoom()">← Leave</button>
+        <button class="btn-primary" id="start-btn" onclick="startGame()" disabled>Start game</button>
+      </div>
+    </div>
+    <div id="chat-waiting"></div>
+  </div>
+
+  <!-- SHAKE PHASE -->
+  <div class="screen" id="s-shake">
+    <div class="card">
+      <h2>Shake your cup!</h2>
+      <p>Only you can see your dice. Others see a hidden cup.</p>
+      <div class="dice-row" id="shake-dice"></div>
+      <div class="msg" id="shake-hint">Press the button to roll your dice!</div>
+      <button class="btn-primary" id="shake-btn" onclick="doShake()">🥤 Shake!</button>
+    </div>
+    <div class="card-flat">
+      <label>Players</label>
+      <div id="shake-players"></div>
+    </div>
+    <div id="chat-shake"></div>
+  </div>
+
+  <!-- BID PHASE -->
+  <div class="screen" id="s-bid">
+    <div class="card">
+      <h2>Your dice (private)</h2>
+      <div class="dice-row" id="bid-dice"></div>
+      <div class="sep"></div>
+      <div class="msg info" id="bid-status">Make a bid or call open!</div>
+      <label>Bid — how many dice show this face?</label>
+      <div class="row2" style="margin-bottom:0.75rem;">
+        <div>
+          <label>Count</label>
+          <input type="number" id="bid-count" min="1" max="20" value="1" style="margin-bottom:0;">
+        </div>
+        <div>
+          <label>Face value</label>
+          <select id="bid-face" style="margin-bottom:0;">
+            <option value="1">⚀ 1</option><option value="2">⚁ 2</option><option value="3">⚂ 3</option>
+            <option value="4">⚃ 4</option><option value="5">⚄ 5</option><option value="6">⚅ 6</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="placeBid()">Place bid</button>
+      <button class="btn-danger" onclick="callOpen()">🔍 Call open! (reveal all dice)</button>
+    </div>
+    <div class="card-flat">
+      <label>Players & bids</label>
+      <div id="bid-players"></div>
+    </div>
+    <div id="chat-bid"></div>
+  </div>
+
+  <!-- REVEAL -->
+  <div class="screen" id="s-reveal">
+    <div class="card">
+      <h2>🔍 All dice revealed!</h2>
+      <p id="reveal-by"></p>
+      <div class="result-grid" id="reveal-grid"></div>
+      <div class="sep"></div>
+      <div class="msg ok" id="reveal-summary"></div>
+      <div class="row2">
+        <button onclick="goBackToLobby()">← Lobby</button>
+        <button class="btn-primary" onclick="playAgain()">Play again</button>
+      </div>
+    </div>
+    <div id="chat-reveal"></div>
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script>
+const FACES = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+let sb, myName='', myId='', currentRoomId=null, myDice=[], realtimeSub=null;
+
+function uid(){ return Math.random().toString(36).slice(2,9).toUpperCase(); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+
+async function initSupabase(){
+  if(typeof SUPABASE_URL==='undefined'||SUPABASE_URL==='YOUR_SUPABASE_URL'){
+    document.getElementById('setup-notice').classList.add('show');
+    return false;
+  }
+  document.getElementById('setup-notice').classList.remove('show');
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return true;
+}
+
+function enterLobby(){
+  const name = document.getElementById('inp-name').value.trim();
+  if(!name){ alert('Enter your name first!'); return; }
+  myName = name;
+  myId = uid();
+  localStorage.setItem('dice_myId', myId);
+  localStorage.setItem('dice_myName', myName);
+  refreshLobby();
+  show('s-lobby');
+}
+
+async function refreshLobby(){
+  const el = document.getElementById('lobby-list');
+  el.innerHTML = '<p style="text-align:center;padding:1rem 0;color:#9ca3af;">Loading...</p>';
+  const { data, error } = await sb.from('rooms').select('*').gt('created_at', new Date(Date.now()-3600000).toISOString()).order('created_at',{ascending:false});
+  if(error||!data||!data.length){ el.innerHTML='<p style="text-align:center;padding:1rem 0;color:#9ca3af;">No rooms yet — create one!</p>'; return; }
+  el.innerHTML = data.map(r=>{
+    const n = (r.players||[]).length;
+    const st = ['playing','shaking','bidding','reveal'].includes(r.status)?'p':n>=4?'f':'w';
+    const lbl = st==='p'?'In game':st==='f'?'Full':'Waiting';
+    return `<div class="lobby-item">
+      <span class="room-name">${esc(r.name)}</span>
+      <span style="font-size:13px;color:#6b7280;">${n}/4</span>
+      <span class="badge badge-${st}">${lbl}</span>
+      ${st==='w'?`<button onclick="joinRoom('${r.id}')" style="width:auto;padding:4px 12px;font-size:12px;margin-bottom:0;">Join</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function createRoom(){
+  const id = uid();
+  const room = {
+    id, name: myName+"'s room", host_id: myId, status:'waiting',
+    players:[{id:myId,name:myName,ready:false,dice:null,bid:null}],
+    last_bid:null, open_called:false, open_called_by:null, round:0,
+    chat:[{id:'sys',name:'',text:myName+' created the room.',ts:Date.now()}]
+  };
+  const {error} = await sb.from('rooms').insert(room);
+  if(error){ alert('Error creating room: '+error.message); return; }
+  currentRoomId = id;
+  myDice = [];
+  await goWaiting();
+}
+
+async function joinRoom(roomId){
+  const {data:room,error} = await sb.from('rooms').select('*').eq('id',roomId).single();
+  if(error||!room){ alert('Room not found.'); refreshLobby(); return; }
+  if(room.status!=='waiting'||room.players.length>=4){ alert('Room no longer available.'); refreshLobby(); return; }
+  if(room.players.find(p=>p.id===myId)){ currentRoomId=roomId; await goWaiting(); return; }
+  const players = [...room.players,{id:myId,name:myName,ready:false,dice:null,bid:null}];
+  const chat = [...(room.chat||[]),{id:'sys',name:'',text:myName+' joined.',ts:Date.now()}];
+  await sb.from('rooms').update({players,chat}).eq('id',roomId);
+  currentRoomId = roomId;
+  myDice = [];
+  await goWaiting();
+}
+
+async function leaveRoom(){
+  if(!currentRoomId)return;
+  const {data:room} = await sb.from('rooms').select('*').eq('id',currentRoomId).single();
+  if(room){
+    const players = room.players.filter(p=>p.id!==myId);
+    const chat = [...(room.chat||[]),{id:'sys',name:'',text:myName+' left.',ts:Date.now()}];
+    if(!players.length){ await sb.from('rooms').delete().eq('id',currentRoomId); }
+    else { await sb.from('rooms').update({players,chat}).eq('id',currentRoomId); }
+  }
+  unsubscribeRoom();
+  currentRoomId=null; myDice=[];
+  refreshLobby(); show('s-lobby');
+}
+
+function unsubscribeRoom(){
+  if(realtimeSub){ sb.removeChannel(realtimeSub); realtimeSub=null; }
+}
+
+function subscribeRoom(handler){
+  unsubscribeRoom();
+  realtimeSub = sb.channel('room-'+currentRoomId)
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'rooms',filter:`id=eq.${currentRoomId}`},
+      payload=>handler(payload.new))
+    .subscribe();
+}
+
+async function goWaiting(){
+  show('s-waiting');
+  const {data:room} = await sb.from('rooms').select('*').eq('id',currentRoomId).single();
+  if(room) renderWaiting(room);
+  subscribeRoom(r=>{
+    if(r.status==='shaking'){ unsubscribeRoom(); goShake(r); return; }
+    renderWaiting(r);
+    renderChat('chat-waiting',r);
+  });
+  if(room) renderChat('chat-waiting',room);
+}
+
+function renderWaiting(room){
+  document.getElementById('room-title').textContent = room.name;
+  document.getElementById('wait-sub').textContent = (room.players.length)+'/4 players joined';
+  document.getElementById('wait-players').innerHTML = room.players.map(p=>`
+    <div class="player-row">
+      <div class="av">${esc(p.name[0].toUpperCase())}</div>
+      <span style="flex:1;font-weight:500;">${esc(p.name)}${p.id===myId?' (you)':''}</span>
+      ${p.id===room.host_id?'<span class="badge badge-host">host</span>':''}
+    </div>`).join('');
+  const sb2=document.getElementById('start-btn');
+  if(room.host_id===myId && room.players.length>=2){ sb2.disabled=false; sb2.textContent='Start ('+room.players.length+' players)'; }
+  else if(room.host_id===myId){ sb2.disabled=true; sb2.textContent='Need 2+ players'; }
+  else{ sb2.disabled=true; sb2.textContent='Waiting for host...'; }
+}
+
+async function startGame(){
+  const {data:room} = await sb.from('rooms').select('*').eq('id',currentRoomId).single();
+  if(!room||room.host_id!==myId)return;
+  const players = room.players.map(p=>({...p,ready:false,dice:null,bid:null}));
+  const chat = [...(room.chat||[]),{id:'sys',name:'',text:'--- Round '+(room.round+1)+' started! ---',ts:Date.now()}];
+  await sb.from('rooms').update({status:'shaking',players,last_bid:null,open_called:false,open_called_by:null,round:room.round+1,chat}).eq('id',currentRoomId);
+}
+
+async function goShake(roomData){
+  myDice=[];
+  show('s-shake');
+  document.getElementById('shake-dice').innerHTML = Array(5).fill('<div class="die">❓</div>').join('');
+  document.getElementById('shake-hint').textContent='Press the button to roll!';
+  document.getElementById('shake-hint').className='msg';
+  document.getElementById('shake-btn').disabled=false;
+  document.getElementById('shake-btn').textContent='🥤 Shake!';
+  if(roomData){ renderShakePlayers(roomData); renderChat('chat-shake',roomData); }
+  subscribeRoom(r=>{
+    if(r.open_called){ unsubscribeRoom(); goReveal(r); return; }
+    if(r.status==='bidding'){ unsubscribeRoom(); goBid(r); return; }
+    renderShakePlayers(r);
+    renderChat('chat-shake',r);
+  });
+}
+
+function renderShakePlayers(room){
+  document.getElementById('shake-players').innerHTML = room.players.map(p=>`
+    <div class="player-row">
+      <div class="av">${esc(p.name[0].toUpperCase())}</div>
+      <span style="flex:1;font-weight:500;">${esc(p.name)}${p.id===myId?' (you)':''}</span>
+      <span style="font-size:12px;color:#6b7280;">${p.ready?'✅ Ready':'⏳ Shaking...'}</span>
+    </div>`).join('');
+}
+
+async function doShake(){
+  const btn=document.getElementById('shake-btn');
+  btn.disabled=true; btn.textContent='Rolling...';
+  document.getElementById('shake-dice').innerHTML=Array(5).fill('<div class="die shake">🎲</div>').join('');
+  setTimeout(async()=>{
+    myDice=Array.from({length:5},()=>Math.ceil(Math.random()*6));
+    document.getElementById('shake-dice').innerHTML=myDice.map(d=>`<div class="die">${FACES[d-1]}</div>`).join('');
+    document.getElementById('shake-hint').textContent='Rolled! Waiting for others...';
+    document.getElementById('shake-hint').className='msg info';
+    btn.textContent='✓ Done';
+    const {data:room}=await sb.from('rooms').select('*').eq('id',currentRoomId).single();
+    if(!room)return;
+    const players=room.players.map(p=>p.id===myId?{...p,dice:myDice,ready:true}:p);
+    const allReady=players.every(p=>p.ready);
+    const update={players};
+    if(allReady) update.status='bidding';
+    await sb.from('rooms').update(update).eq('id',currentRoomId);
+  },550);
+}
+
+async function goBid(roomData){
+  show('s-bid');
+  document.getElementById('bid-dice').innerHTML=myDice.map(d=>`<div class="die">${FACES[d-1]}</div>`).join('');
+  if(roomData){ renderBidPhase(roomData); renderChat('chat-bid',roomData); }
+  subscribeRoom(r=>{
+    if(r.open_called||r.status==='reveal'){ unsubscribeRoom(); goReveal(r); return; }
+    renderBidPhase(r);
+    renderChat('chat-bid',r);
+  });
+}
+
+function renderBidPhase(room){
+  const lb=room.last_bid;
+  const bs=document.getElementById('bid-status');
+  if(lb){bs.textContent=`Last bid: ${lb.count}× face ${lb.face} (by ${esc(lb.byName)})`;bs.className='msg info';}
+  else{bs.textContent='No bids yet — be the first!';bs.className='msg';}
+  document.getElementById('bid-players').innerHTML=room.players.map(p=>`
+    <div class="player-row">
+      <div class="av">${esc(p.name[0].toUpperCase())}</div>
+      <span style="flex:1;font-weight:500;">${esc(p.name)}${p.id===myId?' (you)':''}</span>
+      <span style="font-size:12px;color:#6b7280;">${p.bid?`bid: ${p.bid.count}× ${FACES[p.bid.face-1]}`:'—'}</span>
+    </div>`).join('');
+}
+
+async function placeBid(){
+  const count=parseInt(document.getElementById('bid-count').value)||1;
+  const face=parseInt(document.getElementById('bid-face').value)||1;
+  const {data:room}=await sb.from('rooms').select('*').eq('id',currentRoomId).single();
+  if(!room)return;
+  const players=room.players.map(p=>p.id===myId?{...p,bid:{count,face}}:p);
+  const chat=[...(room.chat||[]),{id:'sys',name:'',text:`${myName} bid: ${count}× face ${face} ${FACES[face-1]}`,ts:Date.now()}];
+  await sb.from('rooms').update({players,last_bid:{count,face,byName:myName,byId:myId},chat}).eq('id',currentRoomId);
+}
+
+async function callOpen(){
+  const {data:room}=await sb.from('rooms').select('*').eq('id',currentRoomId).single();
+  if(!room)return;
+  const chat=[...(room.chat||[]),{id:'sys',name:'',text:`${myName} called OPEN — all dice revealed!`,ts:Date.now()}];
+  await sb.from('rooms').update({open_called:true,open_called_by:myName,status:'reveal',chat}).eq('id',currentRoomId);
+}
+
+async function goReveal(roomData){
+  show('s-reveal');
+  const room=roomData||(await sb.from('rooms').select('*').eq('id',currentRoomId).single()).data;
+  if(!room)return;
+  document.getElementById('reveal-by').textContent=(room.open_called_by||'Someone')+' called open!';
+  document.getElementById('reveal-grid').innerHTML=room.players.map(p=>{
+    const dice=p.id===myId?myDice:(p.dice||[]);
+    return `<div class="result-card">
+      <div class="result-name">${esc(p.name)}${p.id===myId?' (you)':''}</div>
+      <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
+        ${dice.length?dice.map(d=>`<span style="font-size:22px;">${FACES[d-1]}</span>`).join(''):'<span style="color:#9ca3af;font-size:13px;">—</span>'}
+      </div>
+    </div>`;
+  }).join('');
+  const allDice=room.players.flatMap(p=>p.id===myId?myDice:(p.dice||[]));
+  const lb=room.last_bid;
+  let summary='';
+  if(lb&&allDice.length){
+    const cnt=allDice.filter(d=>d===lb.face).length;
+    summary=`Last bid: ${lb.count}× face ${lb.face} — actual count: ${cnt}×. ${cnt>=lb.count?'✅ Bid was correct!':'❌ Bluff! Bid was too high.'}`;
+  } else { summary='All dice shown: '+allDice.map(d=>FACES[d-1]).join(' '); }
+  document.getElementById('reveal-summary').textContent=summary;
+  renderChat('chat-reveal',room);
+  subscribeRoom(r=>renderChat('chat-reveal',r));
+}
+
+async function playAgain(){
+  const {data:room}=await sb.from('rooms').select('*').eq('id',currentRoomId).single();
+  if(!room){goBackToLobby();return;}
+  const players=room.players.map(p=>({...p,ready:false,dice:null,bid:null}));
+  const chat=[...(room.chat||[]),{id:'sys',name:'',text:'--- New round! ---',ts:Date.now()}];
+  await sb.from('rooms').update({status:'waiting',players,last_bid:null,open_called:false,open_called_by:null,chat}).eq('id',currentRoomId);
+  myDice=[];
+  await goWaiting();
+}
+
+function goBackToLobby(){ unsubscribeRoom(); currentRoomId=null; myDice=[]; refreshLobby(); show('s-lobby'); }
+function goBack(from,to){ show(to); }
+
+function renderChat(containerId, room){
+  const el=document.getElementById(containerId);
+  if(!el)return;
+  const msgs=(room&&room.chat)||[];
+  const prevInp=el.querySelector('input')?el.querySelector('input').value:'';
+  el.innerHTML=`
+  <div class="chat-wrap">
+    <div class="chat-head">💬 Room chat</div>
+    <div class="chat-msgs" id="${containerId}-msgs">
+      ${msgs.length?msgs.map(m=>`
+        <div class="chat-msg${m.id===myId?' me':m.id==='sys'?' sys':''}">
+          ${m.id!=='sys'?`<span class="who">${esc(m.name)}: </span>`:''}
+          <span class="txt">${esc(m.text)}</span>
+        </div>`).join(''):'<div class="chat-msg sys">No messages yet...</div>'}
+    </div>
+    <div class="chat-row">
+      <input type="text" id="${containerId}-inp" placeholder="Type message or numbers..." maxlength="120"
+        onkeydown="if(event.key==='Enter')sendChat('${containerId}')" value="${esc(prevInp)}">
+      <button onclick="sendChat('${containerId}')">Send</button>
+    </div>
+  </div>`;
+  const msgsEl=document.getElementById(containerId+'-msgs');
+  if(msgsEl)msgsEl.scrollTop=msgsEl.scrollHeight;
+}
+
+async function sendChat(containerId){
+  const inp=document.getElementById(containerId+'-inp');
+  if(!inp)return;
+  const text=inp.value.trim();
+  if(!text)return;
+  inp.value='';
+  const {data:room}=await sb.from('rooms').select('*').eq('id',currentRoomId).single();
+  if(!room)return;
+  const chat=[...(room.chat||[]),{id:myId,name:myName,text,ts:Date.now()}];
+  const trimmed=chat.length>80?chat.slice(-80):chat;
+  await sb.from('rooms').update({chat:trimmed}).eq('id',currentRoomId);
+}
+
+window.addEventListener('DOMContentLoaded',async()=>{
+  const ok=await initSupabase();
+  if(ok){
+    const savedId=localStorage.getItem('dice_myId');
+    const savedName=localStorage.getItem('dice_myName');
+    if(savedId&&savedName){ myId=savedId; myName=savedName; document.getElementById('inp-name').value=savedName; }
+    show('s-welcome');
+  }
+});
+
+window.addEventListener('beforeunload',async()=>{ if(currentRoomId)await leaveRoom(); });
+</script>
+</body>
+</html>
