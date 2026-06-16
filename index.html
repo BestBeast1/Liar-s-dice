@@ -184,26 +184,29 @@
       <h2>Your dice (private)</h2>
       <div class="dice-row" id="bid-dice"></div>
       <div class="sep"></div>
-      <div class="msg info" id="bid-status">Make a bid or call open!</div>
-      <label>Bid — how many dice show this face?</label>
-      <div class="row2" style="margin-bottom:0.75rem;">
-        <div>
-          <label>Count</label>
-          <input type="number" id="bid-count" min="1" max="20" value="1" style="margin-bottom:0;">
+      <div class="msg info" id="bid-turn-banner" style="font-weight:600;font-size:14px;text-align:center;"></div>
+      <div class="msg" id="bid-status" style="margin-top:6px;">No bids yet — be the first!</div>
+      <div id="bid-controls">
+        <label>Bid — how many dice show this face?</label>
+        <div class="row2" style="margin-bottom:0.75rem;">
+          <div>
+            <label>Count</label>
+            <input type="number" id="bid-count" min="1" max="20" value="1" style="margin-bottom:0;">
+          </div>
+          <div>
+            <label>Face value</label>
+            <select id="bid-face" style="margin-bottom:0;">
+              <option value="1">⚀ 1</option><option value="2">⚁ 2</option><option value="3">⚂ 3</option>
+              <option value="4">⚃ 4</option><option value="5">⚄ 5</option><option value="6">⚅ 6</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label>Face value</label>
-          <select id="bid-face" style="margin-bottom:0;">
-            <option value="1">⚀ 1</option><option value="2">⚁ 2</option><option value="3">⚂ 3</option>
-            <option value="4">⚃ 4</option><option value="5">⚄ 5</option><option value="6">⚅ 6</option>
-          </select>
-        </div>
+        <button class="btn-primary" id="btn-place-bid" onclick="placeBid()">Place bid</button>
+        <button class="btn-danger" id="btn-call-open" onclick="callOpen()">🔍 Call open! (reveal all dice)</button>
       </div>
-      <button class="btn-primary" onclick="placeBid()">Place bid</button>
-      <button class="btn-danger" onclick="callOpen()">🔍 Call open! (reveal all dice)</button>
     </div>
     <div class="card-flat">
-      <label>Players & bids</label>
+      <label>Turn order</label>
       <div id="bid-players"></div>
     </div>
     <div id="chat-bid"></div>
@@ -219,8 +222,9 @@
       <div class="msg ok" id="reveal-summary"></div>
       <div class="row2">
         <button onclick="goBackToLobby()">← Lobby</button>
-        <button class="btn-primary" onclick="playAgain()">Play again</button>
+        <button class="btn-primary" id="play-again-btn" onclick="playAgain()" style="display:none;">▶ Play again</button>
       </div>
+      <div id="waiting-replay-msg" style="display:none;" class="msg" style="text-align:center;">Waiting for host to start next round...</div>
     </div>
     <div id="chat-reveal"></div>
   </div>
@@ -373,7 +377,8 @@ async function startGame(){
   if(!room||room.host_id!==myId)return;
   const players = room.players.map(p=>({...p,ready:false,dice:null,bid:null}));
   const chat = [...(room.chat||[]),{id:'sys',name:'',text:'--- Round '+(room.round+1)+' started! ---',ts:Date.now()}];
-  await sb.from('rooms').update({status:'shaking',players,last_bid:null,open_called:false,open_called_by:null,round:room.round+1,chat}).eq('id',currentRoomId);
+  const firstTurn = players[0].id;
+  await sb.from('rooms').update({status:'shaking',players,last_bid:null,open_called:false,open_called_by:null,round:room.round+1,current_turn:firstTurn,chat}).eq('id',currentRoomId);
 }
 
 async function goShake(roomData){
@@ -417,7 +422,7 @@ async function doShake(){
     const players=room.players.map(p=>p.id===myId?{...p,dice:myDice,ready:true}:p);
     const allReady=players.every(p=>p.ready);
     const update={players};
-    if(allReady) update.status='bidding';
+    if(allReady){ update.status='bidding'; update.current_turn=players[0].id; }
     await sb.from('rooms').update(update).eq('id',currentRoomId);
   },550);
 }
@@ -435,15 +440,36 @@ async function goBid(roomData){
 
 function renderBidPhase(room){
   const lb=room.last_bid;
+  const ct=room.current_turn;
+  const isMyTurn=ct===myId;
+  const turnPlayer=room.players.find(p=>p.id===ct);
+  const turnName=turnPlayer?turnPlayer.name:'?';
+
+  const banner=document.getElementById('bid-turn-banner');
+  if(banner){
+    banner.textContent=isMyTurn?'🎯 Your turn to bid!':'⏳ '+turnName+"'s turn...";
+    banner.className='msg '+(isMyTurn?'ok':'info');
+  }
+
   const bs=document.getElementById('bid-status');
-  if(lb){bs.textContent=`Last bid: ${lb.count}× face ${lb.face} (by ${esc(lb.byName)})`;bs.className='msg info';}
+  if(lb){bs.textContent='Last bid: '+lb.count+'× face '+lb.face+' (by '+esc(lb.byName)+')';bs.className='msg info';}
   else{bs.textContent='No bids yet — be the first!';bs.className='msg';}
-  document.getElementById('bid-players').innerHTML=room.players.map(p=>`
-    <div class="player-row">
+
+  const placeBidBtn=document.getElementById('btn-place-bid');
+  const callOpenBtn=document.getElementById('btn-call-open');
+  if(placeBidBtn){ placeBidBtn.disabled=!isMyTurn; placeBidBtn.style.opacity=isMyTurn?'1':'0.35'; }
+  if(callOpenBtn){ callOpenBtn.disabled=!isMyTurn||!lb; callOpenBtn.style.opacity=(isMyTurn&&lb)?'1':'0.35'; }
+
+  document.getElementById('bid-players').innerHTML=room.players.map((p,i)=>{
+    const isCurrentTurn=p.id===ct;
+    return `<div class="player-row" style="${isCurrentTurn?'background:var(--success-bg);border-radius:8px;padding:9px 8px;':''}">
+      <span style="font-size:12px;color:#9ca3af;min-width:18px;">${i+1}.</span>
       <div class="av">${esc(p.name[0].toUpperCase())}</div>
-      <span style="flex:1;font-weight:500;">${esc(p.name)}${p.id===myId?' (you)':''}</span>
-      <span style="font-size:12px;color:#6b7280;">${p.bid?`bid: ${p.bid.count}× ${FACES[p.bid.face-1]}`:'—'}</span>
-    </div>`).join('');
+      <span style="flex:1;font-weight:${isCurrentTurn?'700':'500'};">${esc(p.name)}${p.id===myId?' (you)':''}</span>
+      ${isCurrentTurn?'<span class="badge badge-p">bidding</span>':''}
+      <span style="font-size:12px;color:#6b7280;">${p.bid?p.bid.count+'× '+FACES[p.bid.face-1]:'—'}</span>
+    </div>`;
+  }).join('');
 }
 
 async function placeBid(){
@@ -451,14 +477,18 @@ async function placeBid(){
   const face=parseInt(document.getElementById('bid-face').value)||1;
   const {data:room}=await sb.from('rooms').select('*').eq('id',currentRoomId).single();
   if(!room)return;
+  if(room.current_turn!==myId){ alert("It's not your turn!"); return; }
   const lb=room.last_bid;
   if(lb){
     if(count<lb.count){ alert('You must bid at least '+lb.count+' dice — cannot lower the count.'); return; }
     if(count===lb.count&&face<=lb.face){ alert('Same count ('+count+'×) — you must choose a higher face value than '+lb.face+'.'); return; }
   }
   const players=room.players.map(p=>p.id===myId?{...p,bid:{count,face}}:p);
+  const myIndex=room.players.findIndex(p=>p.id===myId);
+  const nextIndex=(myIndex+1)%room.players.length;
+  const nextTurn=room.players[nextIndex].id;
   const chat=[...(room.chat||[]),{id:'sys',name:'',text:myName+' bid: '+count+'× face '+face+' '+FACES[face-1],ts:Date.now()}];
-  await sb.from('rooms').update({players,last_bid:{count,face,byName:myName,byId:myId},chat}).eq('id',currentRoomId);
+  await sb.from('rooms').update({players,last_bid:{count,face,byName:myName,byId:myId},current_turn:nextTurn,chat}).eq('id',currentRoomId);
 }
 
 function countWithWildcards(dice, face){
@@ -469,7 +499,9 @@ function countWithWildcards(dice, face){
 async function callOpen(){
   const {data:room}=await sb.from('rooms').select('*').eq('id',currentRoomId).single();
   if(!room)return;
-  const chat=[...(room.chat||[]),{id:'sys',name:'',text:`${myName} called OPEN — all dice revealed!`,ts:Date.now()}];
+  if(room.current_turn!==myId){ alert("It's not your turn!"); return; }
+  if(!room.last_bid){ alert("Someone must place a bid first before calling open."); return; }
+  const chat=[...(room.chat||[]),{id:'sys',name:'',text:myName+' called OPEN — all dice revealed!',ts:Date.now()}];
   await sb.from('rooms').update({open_called:true,open_called_by:myName,status:'reveal',chat}).eq('id',currentRoomId);
 }
 
@@ -497,17 +529,27 @@ async function goReveal(roomData){
   } else { summary='All dice shown: '+allDice.map(d=>FACES[d-1]).join(' '); }
   document.getElementById('reveal-summary').textContent=summary;
   renderChat('chat-reveal',room);
-  subscribeRoom(r=>renderChat('chat-reveal',r));
+  const playBtn=document.getElementById('play-again-btn');
+  const waitMsg=document.getElementById('waiting-replay-msg');
+  if(playBtn) playBtn.style.display=room.host_id===myId?'block':'none';
+  if(waitMsg) waitMsg.style.display=room.host_id!==myId?'block':'none';
+  subscribeRoom(r=>{
+    renderChat('chat-reveal',r);
+    if(r.status==='shaking'){ unsubscribeRoom(); goShake(r); return; }
+    if(r.status==='waiting'){ unsubscribeRoom(); goWaiting(); return; }
+  });
 }
 
 async function playAgain(){
   const {data:room}=await sb.from('rooms').select('*').eq('id',currentRoomId).single();
   if(!room){goBackToLobby();return;}
+  if(room.host_id!==myId){ alert('Only the host can start a new round.'); return; }
   const players=room.players.map(p=>({...p,ready:false,dice:null,bid:null}));
-  const chat=[...(room.chat||[]),{id:'sys',name:'',text:'--- New round! ---',ts:Date.now()}];
-  await sb.from('rooms').update({status:'waiting',players,last_bid:null,open_called:false,open_called_by:null,chat}).eq('id',currentRoomId);
+  const chat=[...(room.chat||[]),{id:'sys',name:'',text:'--- Round '+(room.round+1)+' started! ---',ts:Date.now()}];
+  const firstTurn=players[0].id;
   myDice=[];
-  await goWaiting();
+  await sb.from('rooms').update({status:'shaking',players,last_bid:null,open_called:false,open_called_by:null,round:room.round+1,current_turn:firstTurn,chat}).eq('id',currentRoomId);
+  goShake(null);
 }
 
 function goBackToLobby(){ unsubscribeRoom(); currentRoomId=null; myDice=[]; refreshLobby(); show('s-lobby'); }
